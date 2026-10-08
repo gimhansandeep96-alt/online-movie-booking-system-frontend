@@ -1,22 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import type { ShowDTO, MovieDTO, TheatreDTO } from '../types';
 
-interface Show {
-  id: string;
-  movieTitle: string;
-  theatreName: string;
-  showDate: string;
-  showTime: string;
-  ticketPrice: number;
+interface ShowDetails extends ShowDTO {
+  movie?: MovieDTO;
+  theatre?: TheatreDTO;
 }
 
 const Shows: React.FC = () => {
-  const [shows, setShows] = useState<Show[]>([]);
+  const [shows, setShows] = useState<ShowDetails[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteLoadingId, setDeleteLoadingId] = useState<number | string | null>(null);
 
-  // Filters
   const [selectedMovie, setSelectedMovie] = useState<string>('');
   const [selectedTheatre, setSelectedTheatre] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -24,36 +21,80 @@ const Shows: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchShows();
+    fetchShowsData();
   }, []);
 
-  const fetchShows = async () => {
+  const fetchShowsData = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/shows');
-      setShows(response.data);
+      const [showsRes, moviesRes, theatresRes] = await Promise.all([
+        api.get<ShowDTO[]>('/shows'),
+        api.get<MovieDTO[]>('/movies'),
+        api.get<TheatreDTO[]>('/theatres')
+      ]);
+
+      const moviesMap = new Map(moviesRes.data.map(m => [m.id, m]));
+      const theatresMap = new Map(theatresRes.data.map(t => [t.id, t]));
+
+      const mappedShows: ShowDetails[] = showsRes.data.map(show => ({
+        ...show,
+        movie: moviesMap.get(Number(show.movieId)),
+        theatre: theatresMap.get(Number(show.theatreId))
+      }));
+
+      setShows(mappedShows);
       setError(null);
     } catch (err: any) {
-      setError('Shows ලබාගැනීමේදී දෝෂයක් සිදු විය.');
+      setError('Failed to load shows data.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Filter Logic
+  // Delete Show Handler
+  const handleDeleteShow = async (id?: number | string) => {
+    if (!id) return;
+
+    if (!window.confirm('Are you sure you want to delete this show?')) {
+      return;
+    }
+
+    try {
+      setDeleteLoadingId(id);
+      await api.delete(`/shows/${id}`);
+      setShows((prev) => prev.filter((show) => show.id !== id));
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete show.');
+    } finally {
+      setDeleteLoadingId(null);
+    }
+  };
+
   const filteredShows = shows.filter((show) => {
-    const matchMovie = selectedMovie ? show.movieTitle.toLowerCase().includes(selectedMovie.toLowerCase()) : true;
-    const matchTheatre = selectedTheatre ? show.theatreName.toLowerCase().includes(selectedTheatre.toLowerCase()) : true;
-    const matchDate = selectedDate ? show.showDate === selectedDate : true;
+    const movieTitle = show.movie?.title?.toLowerCase() || '';
+    const theatreName = show.theatre?.name?.toLowerCase() || '';
+    const showDate = show.startTime ? show.startTime.split('T')[0] : '';
+
+    const matchMovie = selectedMovie ? movieTitle.includes(selectedMovie.toLowerCase()) : true;
+    const matchTheatre = selectedTheatre ? theatreName.includes(selectedTheatre.toLowerCase()) : true;
+    const matchDate = selectedDate ? showDate === selectedDate : true;
+
     return matchMovie && matchTheatre && matchDate;
   });
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">Available Shows</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Available Shows</h1>
+        <button
+          onClick={() => navigate('/add-show')}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition"
+        >
+          Add Show
+        </button>
+      </div>
 
-      {/* Filter Options */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-white p-4 rounded-lg shadow-md">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-white p-4 rounded-lg shadow-md border">
         <div>
           <label className="block text-sm font-semibold mb-1 text-gray-600">Filter by Movie</label>
           <input
@@ -85,30 +126,44 @@ const Shows: React.FC = () => {
         </div>
       </div>
 
-      {loading && <p className="text-center text-blue-600">Loading shows...</p>}
-      {error && <p className="text-center text-red-500">{error}</p>}
+      {loading && <p className="text-center text-blue-600 font-semibold">Loading shows...</p>}
+      {error && <p className="text-center text-red-500 font-semibold">{error}</p>}
 
-      {/* Shows Grid */}
       {!loading && filteredShows.length === 0 ? (
-        <p className="text-center text-gray-500">නොමැත / No shows found matching the filters.</p>
+        <p className="text-center text-gray-500">No shows found matching your criteria.</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredShows.map((show) => (
-            <div key={show.id} className="bg-white border p-5 rounded-xl shadow hover:shadow-lg transition duration-200">
-              <h2 className="text-xl font-bold text-gray-800 mb-2">{show.movieTitle}</h2>
-              <p className="text-gray-600"><strong>Theatre:</strong> {show.theatreName}</p>
-              <p className="text-gray-600"><strong>Date:</strong> {show.showDate}</p>
-              <p className="text-gray-600"><strong>Time:</strong> {show.showTime}</p>
-              <p className="text-blue-600 font-bold text-lg mt-2">LKR {show.ticketPrice.toFixed(2)}</p>
-              
-              <button
-                onClick={() => navigate(`/book/${show.id}`)}
-                className="mt-4 w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
-              >
-                Book Seats
-              </button>
-            </div>
-          ))}
+          {filteredShows.map((show) => {
+            const dateObj = new Date(show.startTime);
+            return (
+              <div key={show.id} className="bg-white border p-5 rounded-xl shadow hover:shadow-lg transition flex flex-col justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800 mb-2">{show.movie?.title || 'Unknown Movie'}</h2>
+                  <p className="text-gray-600 text-sm"><strong>Theatre:</strong> {show.theatre?.name || 'N/A'}</p>
+                  <p className="text-gray-600 text-sm"><strong>Location:</strong> {show.theatre?.location || 'N/A'}</p>
+                  <p className="text-gray-600 text-sm"><strong>Date:</strong> {dateObj.toLocaleDateString()}</p>
+                  <p className="text-gray-600 text-sm"><strong>Time:</strong> {dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                  <p className="text-blue-600 font-bold text-lg mt-2">LKR {show.ticketPrice?.toFixed(2)}</p>
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  <button
+                    onClick={() => navigate(`/book/${show.id}`)}
+                    className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
+                  >
+                    Book Seats
+                  </button>
+                  <button
+                    onClick={() => handleDeleteShow(show.id)}
+                    disabled={deleteLoadingId === show.id}
+                    className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition disabled:opacity-50"
+                  >
+                    {deleteLoadingId === show.id ? 'Deleting...' : 'Delete Show'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

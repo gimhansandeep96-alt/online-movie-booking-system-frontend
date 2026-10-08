@@ -1,72 +1,177 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
-import { Navbar } from '../components/Navbar';
+import type { MovieDTO } from '../types';
 
-interface Movie {
-  id: number;
-  title: string;
-  genre: string;
-  durationMinutes: number;
-  description: string;
-}
+const Movies: React.FC = () => {
+  const [movies, setMovies] = useState<MovieDTO[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [selectedGenre, setSelectedGenre] = useState<string>('');
+  const [deleteLoadingId, setDeleteLoadingId] = useState<number | string | null>(null);
 
-export const Movies = () => {
-  const [movies, setMovies] = useState<Movie[]>([]);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchMovies = async () => {
-      try {
-        const response = await api.get('/api/movies');
-        setMovies(response.data);
-      } catch (err) {
-        console.error('Failed to fetch movies', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchMovies();
   }, []);
 
+  const fetchMovies = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get<MovieDTO[]>('/movies');
+      setMovies(response.data);
+      setError(null);
+    } catch (err: any) {
+      setError('Failed to load movies. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete handler function
+  const handleDelete = async (id: number | string) => {
+    if (!window.confirm('Are you sure you want to delete this movie?')) {
+      return;
+    }
+
+    try {
+      setDeleteLoadingId(id);
+      await api.delete(`/movies/${id}`);
+      // UI eken movie eka ain karanawa state eka update karala
+      setMovies(movies.filter((movie: any) => movie.id !== id));
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete movie.');
+    } finally {
+      setDeleteLoadingId(null);
+    }
+  };
+
+  const genres = Array.from(
+    new Set(movies.map((m) => m.genre).filter(Boolean))
+  ) as string[];
+
+  const filteredMovies = movies.filter((movie) => {
+    const matchesSearch = movie.title
+      ?.toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const matchesGenre = selectedGenre
+      ? movie.genre === selectedGenre
+      : true;
+
+    return matchesSearch && matchesGenre;
+  });
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <Navbar />
-      
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-8 text-slate-100 border-b border-slate-800 pb-4">
-          Now Showing
-        </h1>
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Now Showing</h1>
+        <button
+          onClick={() => navigate('/add-movie')}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition"
+        >
+          Add Movie
+        </button>
+      </div>
 
-        {loading ? (
-          <div className="text-center py-12 text-slate-400">Loading movies...</div>
-        ) : movies.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">No movies available right now.</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {movies.map((movie) => (
-              <div key={movie.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col justify-between hover:border-purple-500/50 transition">
-                <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <h2 className="text-xl font-semibold text-slate-100">{movie.title}</h2>
-                    <span className="bg-purple-900/50 text-purple-300 text-xs px-2.5 py-1 rounded-full border border-purple-700/40">
-                      {movie.genre}
-                    </span>
-                  </div>
-                  <p className="text-slate-400 text-sm mb-4 line-clamp-3">{movie.description}</p>
-                </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-white p-4 rounded-lg shadow-md border">
+        <div>
+          <label className="block text-sm font-semibold mb-1 text-gray-600">
+            Search Movies
+          </label>
+          <input
+            type="text"
+            placeholder="Search by title..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
 
-                <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between">
-                  <span className="text-xs text-slate-500 font-mono">{movie.durationMinutes} mins</span>
-                  <button className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
-                    Book Tickets
-                  </button>
+        <div>
+          <label className="block text-sm font-semibold mb-1 text-gray-600">
+            Filter by Genre
+          </label>
+          <select
+            value={selectedGenre}
+            onChange={(e) => setSelectedGenre(e.target.value)}
+            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Genres</option>
+            {genres.map((genre) => (
+              <option key={genre} value={genre}>
+                {genre}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {loading && (
+        <p className="text-center text-blue-600 font-semibold">Loading movies...</p>
+      )}
+
+      {error && (
+        <p className="text-center text-red-500 font-semibold">{error}</p>
+      )}
+
+      {!loading && filteredMovies.length === 0 ? (
+        <p className="text-center text-gray-500">No movies found matching your criteria.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {filteredMovies.map((movie: any) => (
+            <div
+              key={movie.id}
+              className="bg-white border rounded-xl shadow hover:shadow-lg transition flex flex-col justify-between overflow-hidden"
+            >
+              <div className="p-5">
+                <span className="text-xs font-semibold uppercase px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                  {movie.genre || 'General'}
+                </span>
+
+                <h2 className="text-xl font-bold text-gray-800 mt-2 mb-2">
+                  {movie.title}
+                </h2>
+
+                <p className="text-gray-600 text-sm line-clamp-3 mb-4">
+                  {movie.description || 'No description available.'}
+                </p>
+
+                <div className="text-xs text-gray-500 space-y-1">
+                  <p>
+                    <strong>Duration:</strong> {movie.duration ? `${movie.duration} mins` : 'N/A'}
+                  </p>
+                  <p>
+                    <strong>Language:</strong> {movie.language || 'N/A'}
+                  </p>
+                  <p>
+                    <strong>Release Date:</strong> {movie.releaseDate || 'N/A'}
+                  </p>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </main>
+
+              <div className="p-5 pt-0 space-y-2">
+                <button
+                  onClick={() => navigate('/shows')}
+                  className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
+                >
+                  View Shows
+                </button>
+                <button
+                  onClick={() => handleDelete(movie.id)}
+                  disabled={deleteLoadingId === movie.id}
+                  className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition disabled:opacity-50"
+                >
+                  {deleteLoadingId === movie.id ? 'Deleting...' : 'Delete Movie'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
+
+export default Movies;
