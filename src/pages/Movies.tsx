@@ -12,6 +12,7 @@ const Movies: React.FC = () => {
   const [deleteLoadingId, setDeleteLoadingId] = useState<number | string | null>(null);
 
   const navigate = useNavigate();
+  const role = localStorage.getItem("role");
 
   useEffect(() => {
     fetchMovies();
@@ -30,7 +31,7 @@ const Movies: React.FC = () => {
     }
   };
 
-  // Delete handler function
+  
   const handleDelete = async (id: number | string) => {
     if (!window.confirm('Are you sure you want to delete this movie?')) {
       return;
@@ -39,7 +40,7 @@ const Movies: React.FC = () => {
     try {
       setDeleteLoadingId(id);
       await api.delete(`/movies/${id}`);
-      // UI eken movie eka ain karanawa state eka update karala
+      
       setMovies(movies.filter((movie: any) => movie.id !== id));
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to delete movie.');
@@ -67,12 +68,14 @@ const Movies: React.FC = () => {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Now Showing</h1>
-        <button
-          onClick={() => navigate('/add-movie')}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition"
-        >
-          Add Movie
-        </button>
+        {role === "ADMIN" && (
+          <button
+            onClick={() => navigate('/add-movie')}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition"
+          >
+            Add Movie
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-white p-4 rounded-lg shadow-md border">
@@ -158,13 +161,15 @@ const Movies: React.FC = () => {
                 >
                   View Shows
                 </button>
-                <button
-                  onClick={() => handleDelete(movie.id)}
-                  disabled={deleteLoadingId === movie.id}
-                  className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition disabled:opacity-50"
-                >
-                  {deleteLoadingId === movie.id ? 'Deleting...' : 'Delete Movie'}
-                </button>
+                {role === "ADMIN" && (
+                  <button
+                    onClick={() => handleDelete(movie.id)}
+                    disabled={deleteLoadingId === movie.id}
+                    className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition disabled:opacity-50"
+                  >
+                    {deleteLoadingId === movie.id ? 'Deleting...' : 'Delete Movie'}
+                  </button>
+                )}
               </div>
             </div>
           ))}

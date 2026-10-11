@@ -19,6 +19,7 @@ const Shows: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>('');
 
   const navigate = useNavigate();
+  const role = localStorage.getItem("role");
 
   useEffect(() => {
     fetchShowsData();
@@ -86,12 +87,14 @@ const Shows: React.FC = () => {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Available Shows</h1>
-        <button
-          onClick={() => navigate('/add-show')}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition"
-        >
-          Add Show
-        </button>
+        {role === "ADMIN" && (
+          <button
+            onClick={() => navigate('/add-show')}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition"
+          >
+            Add Show
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-white p-4 rounded-lg shadow-md border">
@@ -153,13 +156,15 @@ const Shows: React.FC = () => {
                   >
                     Book Seats
                   </button>
-                  <button
-                    onClick={() => handleDeleteShow(show.id)}
-                    disabled={deleteLoadingId === show.id}
-                    className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition disabled:opacity-50"
-                  >
-                    {deleteLoadingId === show.id ? 'Deleting...' : 'Delete Show'}
-                  </button>
+                  {role === "ADMIN" && (
+                    <button
+                      onClick={() => handleDeleteShow(show.id)}
+                      disabled={deleteLoadingId === show.id}
+                      className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition disabled:opacity-50"
+                    >
+                      {deleteLoadingId === show.id ? 'Deleting...' : 'Delete Show'}
+                    </button>
+                  )}
                 </div>
               </div>
             );
